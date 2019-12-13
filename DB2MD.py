@@ -83,17 +83,17 @@ init_config()
 md_file_path = current_path + "\\" + str(database) + ".md"
 md_file = open(md_file_path, "w")
 table_list = get_table_list()
-for table_struct in table_list:
-    table_name = table_struct["TABLE_NAME"]
-    engine = table_struct["ENGINE"]
+for table in table_list:
+    table_name = table["TABLE_NAME"]
+    engine = table["ENGINE"]
 
-    md_file.write("## 表名:%s 存储引擎:%s 字符编码:%s 备注:%s \n" % (table_struct["TABLE_NAME"], table_struct["ENGINE"],
-                                                         table_struct["TABLE_COLLATION"],
-                                                         table_struct["TABLE_COMMENT"]))
+    md_file.write("## 表名:%s 存储引擎:%s 字符编码:%s 备注:%s \n" % (table["TABLE_NAME"], table["ENGINE"],
+                                                         table["TABLE_COLLATION"],
+                                                         table["TABLE_COMMENT"]))
     md_file.write("序号 | 字段 | 描述 | 类型 | 键类型 | 是否允许为NULL | 默认值 |\n")
     md_file.write("-|-|-|-|-|-|-\n")
     sql = "select * from information_schema.COLUMNS where table_name = '%s' and table_schema = '%s'" % (
-        table_struct["TABLE_NAME"], database)
+        table["TABLE_NAME"], database)
     table_struct_list = DbUtil.query_all(sql)
     for table_struct in table_struct_list:
         for key in table_struct:
