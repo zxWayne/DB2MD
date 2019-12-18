@@ -2,68 +2,144 @@
 import pymysql
 import contextlib
 from util.log_util import LogFactory
+from abc import ABCMeta, abstractmethod
+import cx_Oracle as cx
 
 logger = LogFactory.get_logger()
 
 
-class DbUtil:
+class AbstractDbUtil(metaclass=ABCMeta):
+    conn = None
+    cursor = None
+
     # 连接配置
     connection = {}
 
-    # 定义上下文管理器，连接后自动关闭连接
-    @staticmethod
+    @abstractmethod
+    def init(self, con_config):
+        pass
+
+    @abstractmethod
+    def execute(self, sql: str):
+        pass
+
+    @abstractmethod
+    def query_one(self, sql: str) -> dict:
+        pass
+
+    @abstractmethod
+    def query_all(self, sql: str) -> list:
+        pass
+
+
+class OracleDbUtil(AbstractDbUtil):
+
+    def __init__(self, con_config):
+        self.init(con_config)
+
     @contextlib.contextmanager
-    def mysql():
-        if len(DbUtil.connection) <= 0:
-            raise RuntimeError("未初始化连接配置")
-        host = DbUtil.connection.get("host")
-        port = DbUtil.connection.get("port")
-        user = DbUtil.connection.get("user")
-        password = DbUtil.connection.get("password")
-        database = DbUtil.connection.get("database")
-        charset = DbUtil.connection.get("charset")
+    def init(self, con_config):
 
-        conn = pymysql.connect(host=host, port=port, user=user, passwd=password, db=database, charset=charset)
-        cursor = conn.cursor(cursor=pymysql.cursors.DictCursor)
-        try:
-            yield cursor
-        finally:
-            conn.commit()
-            cursor.close()
-            conn.close()
+        host = con_config.get("host")
+        port = con_config.get("port")
+        user = con_config.get("user")
+        password = con_config.get("password")
+        database = con_config.get("database")
+        charset = con_config.get("charset")
+        conn_str = host + ':' + str(port) + '/' + database
+        self.conn = cx.connect(user, password, conn_str)
+        self.cursor = self.conn.cursor()
 
-    @staticmethod
-    def execute(sql):
+    def execute(self, sql: str):
         logger.debug(sql)
-        with DbUtil.mysql() as cursor:
-            row_count = cursor.execute(sql)
-            return row_count
+        row_count = self.cursor.execute(sql)
+        return row_count
 
-    @staticmethod
-    def query_one(sql: str) -> dict:
+    def query_one(self, sql: str) -> dict:
         """
         查询一条数据
         :param sql:
         :return:
         """
         logger.debug(sql)
-        with DbUtil.mysql() as cursor:
-            cursor.execute(sql)
-            data = cursor.fetchone()
-            return data
 
-    @staticmethod
-    def query_all(sql: str) -> list:
+        self.cursor.execute(sql)
+        cols = [d[0] for d in self.cursor.description]
+        data = self.cursor.fetchone()
+        data = dict(zip(cols, data))
+        return data
+
+    def query_all(self, sql: str) -> list:
         """
         查询所有的数据
         :param sql:
         :return:
         """
         logger.debug(sql)
-        with DbUtil.mysql() as cursor:
-            cursor.execute(sql)
-            data = cursor.fetchall()
-            return data
+        self.cursor.execute(sql)
+        data = self.cursor.fetchall()
+        cols = [d[0] for d in self.cursor.description]
+        result = list()
+        for row in data:
+            result.append(dict(zip(cols, row)))
+        return result
+
+    def __del__(self):
+        self.cursor.close()
+        self.conn.close()
+
+
+class MysqlDbUtil(AbstractDbUtil):
+    # 连接配置
+
+    def __init__(self, con_config):
+        self.init(con_config)
+
+    # 定义上下文管理器，连接后自动关闭连接
+    @contextlib.contextmanager
+    def init(self, con_config):
+
+        host = con_config.get("host")
+        port = con_config.get("port")
+        user = con_config.get("user")
+        password = con_config.get("password")
+        database = con_config.get("database")
+        charset = con_config.get("charset")
+
+        self.conn = pymysql.connect(host=host, port=port, user=user, passwd=password, db=database, charset=charset)
+        self.cursor = self.conn.cursor(cursor=pymysql.cursors.DictCursor)
+
+    def execute(self, sql):
+        logger.debug(sql)
+        row_count = self.cursor.execute(sql)
+        return row_count
+
+    def query_one(self, sql: str) -> dict:
+        """
+        查询一条数据
+        :param sql:
+        :return:
+        """
+        logger.debug(sql)
+
+        self.cursor.execute(sql)
+        data = self.cursor.fetchone()
+        return data
+
+    def query_all(self, sql: str) -> list:
+        """
+        查询所有的数据
+        :param sql:
+        :return:
+        """
+        logger.debug(sql)
+        self.cursor.execute(sql)
+        data = self.cursor.fetchall()
+        return data
+
+    def __del__(self):
+        self.cursor.close()
+        self.conn.close()
 
 
 if __name__ == '__main__':
@@ -76,7 +152,7 @@ if __name__ == '__main__':
         "charset": 'utf8'
     }
 
-    DbUtil.connection = connection
-    a = DbUtil.execute("insert into tb_role (remarks,role_name) value ('aa','bb')")
+    util = MysqlDbUtil(connection)
+    a = util.query_all(" select * from tb_user")
 
-    print(type(a))
+    print(a)

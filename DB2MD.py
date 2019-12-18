@@ -2,21 +2,25 @@
 from pymysql import OperationalError
 
 from util.log_util import LogFactory
-from util.db_util import DbUtil
+from util.db_util import MysqlDbUtil
 import configparser
 import os
 import sys
+import argparse
 
 current_path = os.path.dirname(os.path.realpath(sys.argv[0]))
 
 config_file_path = current_path + r"/config.ini"
+output_path = None
 
+db_type = None
 host = None
 user = None
 port = None
 password = None
 database = None
 charset = None
+
 
 
 def read_config_file():
@@ -30,7 +34,7 @@ def read_config_file():
     cf = configparser.ConfigParser()
     cf.read(config_file_path)  # 读取配置文件，如果写文件的绝对路径，就可以不用os模块
     try:
-        cf.items("mysql")
+        cf.items("database")
     except configparser.NoSectionError as e:
         logger.error(e.message)
         exit(1)
@@ -42,13 +46,18 @@ def read_config_file():
         global password
         global database
         global charset
-        host = str(cf.get("mysql", "host")).strip()
-        user = str(cf.get("mysql", "user")).strip()
-        port = int(cf.get("mysql", "port"))
-        password = str(cf.get("mysql", "password")).strip()
-        database = str(cf.get("mysql", "database")).strip()
-        charset = str(cf.get("mysql", "charset")).strip()
-        DbUtil.connection = {"host": host, "user": user, "password": password, "database": database, "port": port,
+        global db_type
+        host = str(cf.get("database", "host")).strip()
+        user = str(cf.get("database", "user")).strip()
+        port = int(cf.get("database", "port"))
+        password = str(cf.get("database", "password")).strip()
+        database = str(cf.get("database", "database")).strip()
+        charset = str(cf.get("database", "charset")).strip()
+        db_type = str(cf.get("database", "db-type")).strip()
+        if db_type not in ["oracle", "mysql"]:
+            print("db-type为未识别数据库类型,可选值为%s" % ["oracle", "mysql"])
+            exit(1)
+        MysqlDbUtil.connection = {"db_type": db_type, "host": host, "user": user, "password": password, "database": database, "port": port,
                              "charset": charset}
     except configparser.NoOptionError as e:
         logger.error(e.message)
@@ -57,7 +66,7 @@ def read_config_file():
     # 测试数据库连接是否正常
     test_sql = "select now()"
     try:
-        DbUtil.query_one(test_sql)
+        MysqlDbUtil.query_one(test_sql)
     except OperationalError as e:
         logger.error(e)
         exit(1)
@@ -70,11 +79,13 @@ def init_config():
 def get_table_list() -> list:
     global database
     sql = "select TABLE_NAME,ENGINE,TABLE_COLLATION,TABLE_COMMENT from information_schema.TABLES where table_schema = '%s' order by table_name" % database
-    data_tables = DbUtil.query_all(sql)
+    data_tables = MysqlDbUtil.query_all(sql)
     mysql_table_list = list()
     for table in data_tables:
         mysql_table_list.append(table)
     return mysql_table_list
+
+
 
 
 logger = LogFactory.get_logger()
@@ -94,7 +105,7 @@ for table in table_list:
     md_file.write("-|-|-|-|-|-|-\n")
     sql = "select * from information_schema.COLUMNS where table_name = '%s' and table_schema = '%s'" % (
         table["TABLE_NAME"], database)
-    table_struct_list = DbUtil.query_all(sql)
+    table_struct_list = MysqlDbUtil.query_all(sql)
     for table_struct in table_struct_list:
         for key in table_struct:
             if table_struct[key] is None or table_struct[key] == "":
