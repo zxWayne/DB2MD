@@ -63,7 +63,7 @@ logging_config = {
     'loggers': {
         'root': {
             'handlers': ['console', 'log'],
-            'level': 'INFO',
+            'level': 'DEBUG',
             'propagate': True,  # 是否传递给父记录器
         },
         'simple': {

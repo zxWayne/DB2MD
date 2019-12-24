@@ -20,7 +20,7 @@ class AbstractDbUtil(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def execute(self, sql: str):
+    def execute(self, sql: str) -> int:
         pass
 
     @abstractmethod
@@ -39,18 +39,18 @@ class OracleDbUtil(AbstractDbUtil):
 
     @contextlib.contextmanager
     def init(self, con_config):
-
         host = con_config.get("host")
         port = con_config.get("port")
         user = con_config.get("user")
         password = con_config.get("password")
         database = con_config.get("database")
         charset = con_config.get("charset")
+
         conn_str = host + ':' + str(port) + '/' + database
         self.conn = cx.connect(user, password, conn_str)
         self.cursor = self.conn.cursor()
 
-    def execute(self, sql: str):
+    def execute(self, sql: str) -> int:
         logger.debug(sql)
         row_count = self.cursor.execute(sql)
         return row_count
@@ -98,7 +98,6 @@ class MysqlDbUtil(AbstractDbUtil):
     # 定义上下文管理器，连接后自动关闭连接
     @contextlib.contextmanager
     def init(self, con_config):
-
         host = con_config.get("host")
         port = con_config.get("port")
         user = con_config.get("user")
@@ -109,7 +108,7 @@ class MysqlDbUtil(AbstractDbUtil):
         self.conn = pymysql.connect(host=host, port=port, user=user, passwd=password, db=database, charset=charset)
         self.cursor = self.conn.cursor(cursor=pymysql.cursors.DictCursor)
 
-    def execute(self, sql):
+    def execute(self, sql) -> int:
         logger.debug(sql)
         row_count = self.cursor.execute(sql)
         return row_count
@@ -140,6 +139,17 @@ class MysqlDbUtil(AbstractDbUtil):
     def __del__(self):
         self.cursor.close()
         self.conn.close()
+
+
+class ConnectFactory:
+
+    @staticmethod
+    def createConnector(connection) -> AbstractDbUtil:
+        if connection["db_type"] == "mysql":
+            connector = MysqlDbUtil(connection)
+        else:
+            connector = OracleDbUtil(connection)
+        return connector
 
 
 if __name__ == '__main__':
